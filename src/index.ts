@@ -334,6 +334,16 @@ async function runAgent(
     }
 
     if (output.status === 'error') {
+      // Stale session: Claude Code can't find the session ID — clear it so the
+      // next retry starts a fresh session instead of looping forever.
+      if (output.error?.includes('No conversation found with session ID')) {
+        logger.warn(
+          { group: group.name },
+          'Stale session detected, clearing session for fresh retry',
+        );
+        sessions[group.folder] = '';
+        setSession(group.folder, '');
+      }
       logger.error(
         { group: group.name, error: output.error },
         'Container agent error',
