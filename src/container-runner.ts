@@ -26,6 +26,7 @@ import {
   stopContainer,
 } from './container-runtime.js';
 import { detectAuthMode } from './credential-proxy.js';
+import { readEnvFile } from './env.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup } from './types.js';
 
@@ -166,9 +167,18 @@ function buildVolumeMounts(
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
-  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true, mode: 0o777 });
-  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true, mode: 0o777 });
-  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true, mode: 0o777 });
+  fs.mkdirSync(path.join(groupIpcDir, 'messages'), {
+    recursive: true,
+    mode: 0o777,
+  });
+  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), {
+    recursive: true,
+    mode: 0o777,
+  });
+  fs.mkdirSync(path.join(groupIpcDir, 'input'), {
+    recursive: true,
+    mode: 0o777,
+  });
   // Ensure existing dirs are also writable by the container's node user
   fs.chmodSync(path.join(groupIpcDir, 'messages'), 0o777);
   fs.chmodSync(path.join(groupIpcDir, 'tasks'), 0o777);
@@ -224,6 +234,12 @@ function buildContainerArgs(
 
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
+
+  // TAMUS AI credentials for cost-effective model routing
+  const tamusEndpoint = process.env.TAMUS_AI_ENDPOINT || readEnvFile(['TAMUS_AI_ENDPOINT']).TAMUS_AI_ENDPOINT;
+  const tamusKey = process.env.TAMUS_AI_KEY || readEnvFile(['TAMUS_AI_KEY']).TAMUS_AI_KEY;
+  if (tamusEndpoint) args.push('-e', `TAMUS_AI_ENDPOINT=${tamusEndpoint}`);
+  if (tamusKey) args.push('-e', `TAMUS_AI_KEY=${tamusKey}`);
 
   // Route API traffic through the credential proxy (containers never see real secrets)
   args.push(

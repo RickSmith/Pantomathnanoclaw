@@ -47,6 +47,31 @@ When you learn something important:
 - Split files larger than 500 lines into folders
 - Keep an index in your memory for the files you create
 
+## Cost-Effective AI Routing
+
+You have access to `mcp__nanoclaw__call_ai` — a tool that calls cheaper AI models via TAMUS AI. Use it for subtasks that don't need your full reasoning capability.
+
+**When to use `call_ai` instead of doing it yourself:**
+- Formatting or summarizing text → `haiku`
+- Simple yes/no checks, monitoring → `haiku`
+- Weather, alerts, basic Q&A → `haiku`
+- Log analysis, pattern recognition → `sonnet-3.5`
+- Complex multi-step analysis → `sonnet-4`
+- Hard reasoning or advanced coding → `opus` or `o3`
+
+**Default to `haiku`** — it's ~100x cheaper and handles most routine work well.
+
+**Example:**
+```
+# Instead of writing a summary yourself, delegate it:
+result = mcp__nanoclaw__call_ai(
+  prompt="Summarize these logs in 3 bullet points: ...",
+  model="haiku"
+)
+```
+
+Only use your own full reasoning for tasks that genuinely need it (planning, judgment calls, complex coordination).
+
 ## Message Formatting
 
 NEVER use markdown. Only use WhatsApp/Telegram formatting:

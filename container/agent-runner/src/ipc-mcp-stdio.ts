@@ -333,6 +333,139 @@ Use available_groups.json to find the JID for a group. The folder name must be c
   },
 );
 
+server.tool(
+  'call_ai',
+  `Call a cost-effective AI model for subtasks. Use this to save cost on routine work instead of doing everything with the main Claude agent.
+
+Models (cheapest to most expensive):
+• haiku — Ultra-cheap. Monitoring, simple checks, basic text formatting. ~100x cheaper than sonnet-4.
+• gemini-flash-lite — Ultra-cheap alternative to haiku.
+• sonnet-3.5 — Cheap. Summaries, simple analysis, Q&A.
+• gemini-flash — Cheap. Fast Google model.
+• gpt-4o — Cheap. OpenAI efficient model.
+• sonnet-4 — Balanced. Complex analysis, multi-step reasoning.
+• gemini-pro — Balanced. Advanced Google model.
+• opus — Premium. Hardest reasoning, creative tasks.
+• gpt-5 — Premium. Latest OpenAI.
+• o3 — Premium. Hard logical reasoning.
+
+Guidelines:
+• Default to haiku for anything straightforward (formatting, summarizing, yes/no checks).
+• Use sonnet-3.5 for analysis that needs some reasoning.
+• Only use sonnet-4 or above for genuinely complex tasks.
+• Never use opus/gpt-5/o3 unless the task truly requires it.`,
+  {
+    prompt: z.string().describe('The prompt to send to the model'),
+    model: z
+      .enum([
+        'haiku',
+        'gemini-flash-lite',
+        'sonnet-3.5',
+        'gemini-flash',
+        'gpt-4o',
+        'sonnet-4',
+        'gemini-pro',
+        'opus',
+        'gpt-5',
+        'o3',
+      ])
+      .default('haiku')
+      .describe('Model to use. Default: haiku (cheapest)'),
+    system: z.string().optional().describe('Optional system prompt'),
+    max_tokens: z.number().optional().describe('Max tokens to generate (default: 1000)'),
+  },
+  async (args) => {
+    const endpoint =
+      process.env.TAMUS_AI_ENDPOINT || 'https://tamucc-api.tamus.ai';
+    const apiKey = process.env.TAMUS_AI_KEY;
+
+    if (!apiKey) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: 'Error: TAMUS_AI_KEY not configured. Add it to .env and restart the service.',
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const modelMap: Record<string, string> = {
+      haiku: 'protected.Claude 3.5 Haiku',
+      'gemini-flash-lite': 'protected.gemini-2.5-flash-lite',
+      'sonnet-3.5': 'protected.Claude 3.5 Sonnet',
+      'gemini-flash': 'protected.gemini-2.5-flash',
+      'gpt-4o': 'protected.gpt-4o',
+      'sonnet-4': 'protected.Claude Sonnet 4',
+      'gemini-pro': 'protected.gemini-2.5-pro',
+      opus: 'protected.Claude Opus 4.5',
+      'gpt-5': 'protected.gpt-5.2',
+      o3: 'protected.o3',
+    };
+
+    const modelId = modelMap[args.model] ?? modelMap['haiku'];
+    const messages: { role: string; content: string }[] = [];
+    if (args.system) messages.push({ role: 'system', content: args.system });
+    messages.push({ role: 'user', content: args.prompt });
+
+    const body = JSON.stringify({
+      model: modelId,
+      messages,
+      max_tokens: args.max_tokens ?? 1000,
+      stream: false,
+    });
+
+    try {
+      const response = await fetch(`${endpoint}/api/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `TAMUS AI error (${response.status}): ${err}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const result = (await response.json()) as {
+        choices: { message: { content: string } }[];
+        model: string;
+        usage?: { prompt_tokens: number; completion_tokens: number };
+      };
+      const content = result.choices[0].message.content;
+      const usage = result.usage
+        ? ` [${result.usage.prompt_tokens}in/${result.usage.completion_tokens}out tokens, model: ${args.model}]`
+        : '';
+
+      return {
+        content: [{ type: 'text' as const, text: content + usage }],
+      };
+    } catch (err) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `TAMUS AI request failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
